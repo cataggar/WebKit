@@ -1,0 +1,71 @@
+name: jsc full build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - buz-build-zig
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+# A full JSC compile is expensive, so on PRs it only runs when the PR carries
+# the "full-build" label. It always runs on manual dispatch and on pushes to
+# the integration branch.
+jobs:
+  jsc-linux:
+    name: full JSC build (linux-x64, release)
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'full-build')
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned Zig version
+        id: zig
+        shell: bash
+        run: echo "version=$(cat .zig-version)" >> "$GITHUB_OUTPUT"
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.zig.outputs.version }}
+
+      # build.zig prefers clang-21 (matches the fork's LLVM 21 toolchain).
+      - name: Install LLVM 21
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
+          clang-21 --version
+
+      # System ICU + codegen tools — mirrors the documented developer build
+      # (the path build.ts/build.zig drive; the bespoke vendored ICU is only
+      # used by the Docker release pipeline).
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build ruby ruby-dev bison gawk perl make python3 \
+            libicu-dev ccache
+          cmake --version
+          ninja --version
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-jsc-linux-${{ github.sha }}
+          restore-keys: |
+            ccache-jsc-linux-
+
+      - name: Build JSC (release) via build.zig
+        run: zig build -Dconfig=release
+
+      - name: Smoke-test the jsc binary
+        run: |
+          ls -la WebKitBuild/Release/bin || true
+          JSC=WebKitBuild/Release/bin/jsc
+          test -x "$JSC"
+          out="$("$JSC" -e 'print(40 + 2)')"
+          echo "jsc output: $out"
+          test "$out" = "42"
