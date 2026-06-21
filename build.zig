@@ -15,7 +15,7 @@ const Io = std.Io;
 //   zig build -Dconfig=release -Dprint=true   # dry-run: print cmake argv, run nothing
 //   zig build configure -Dconfig=debug        # configure only
 //
-// Parity target: oven-sh/WebKit build.ts (debug | release | lto).
+// Toolchain: pinned in `.zig-version`. Parity target: oven-sh/WebKit build.ts.
 
 const Config = enum { debug, release, lto };
 
@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) void {
     const is_arm64 = host.cpu.arch == .aarch64;
 
     // The WebKit source root is the directory containing this build.zig.
-    const src_dir = buildRootAbs(b);
+    const src_dir = b.build_root.path orelse ".";
     const build_dir_rel = switch (config) {
         .debug => "WebKitBuild/Debug",
         .release => "WebKitBuild/Release",
@@ -39,15 +39,15 @@ pub fn build(b: *std.Build) void {
     const build_dir_abs = b.pathJoin(&.{ src_dir, build_dir_rel });
 
     // Tool detection (mirrors build.ts findExecutable fallbacks; returns full paths).
-    const ccache = b.findProgram(.{ .names = &.{"ccache"} });
+    const ccache = which(b, &.{"ccache"});
     const cc_base = if (is_windows)
-        b.findProgram(.{ .names = &.{ "clang-cl.exe", "clang-cl" } }) orelse "clang-cl"
+        which(b, &.{ "clang-cl.exe", "clang-cl" }) orelse "clang-cl"
     else
-        b.findProgram(.{ .names = &.{ "clang-21", "clang" } }) orelse "clang";
+        which(b, &.{ "clang-21", "clang" }) orelse "clang";
     const cxx_base = if (is_windows)
-        b.findProgram(.{ .names = &.{ "clang-cl.exe", "clang-cl" } }) orelse "clang-cl"
+        which(b, &.{ "clang-cl.exe", "clang-cl" }) orelse "clang-cl"
     else
-        b.findProgram(.{ .names = &.{ "clang++-21", "clang++" } }) orelse "clang++";
+        which(b, &.{ "clang++-21", "clang++" }) orelse "clang++";
 
     const a = b.allocator;
     var flags: std.ArrayList([]const u8) = .empty;
@@ -83,7 +83,7 @@ pub fn build(b: *std.Build) void {
     if (is_mac or is_linux) {
         flags.append(a, "-DENABLE_REMOTE_INSPECTOR=ON") catch @panic("OOM");
     } else if (is_windows) {
-        const lld_link = b.findProgram(.{ .names = &.{ "lld-link.exe", "lld-link" } }) orelse "lld-link";
+        const lld_link = which(b, &.{ "lld-link.exe", "lld-link" }) orelse "lld-link";
         const icu = windowsIcuPaths(b, src_dir, config, is_arm64);
         flags.appendSlice(a, &.{
             "-DENABLE_REMOTE_INSPECTOR=ON",
@@ -191,11 +191,9 @@ pub fn build(b: *std.Build) void {
     b.default_step.dependOn(&build_jsc.step);
 }
 
-/// Absolute path of the directory containing this build.zig (the WebKit root).
-fn buildRootAbs(b: *std.Build) []const u8 {
-    const base = b.root.root_dir.path orelse ".";
-    if (b.root.sub_path.len == 0) return base;
-    return b.pathJoin(&.{ base, b.root.sub_path });
+/// Configure-time PATH lookup; returns the first match's full path (like Bun.which).
+fn which(b: *std.Build, names: []const []const u8) ?[]const u8 {
+    return b.findProgram(names, &.{}) catch null;
 }
 
 /// Configure-time directory existence check (for Windows vcpkg triplet detection).

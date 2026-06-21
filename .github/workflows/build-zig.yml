@@ -22,8 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Installs the Zig version pinned in .zig-version.
+      # setup-zig@v2 does not auto-read .zig-version, so pass it explicitly.
+      - name: Read pinned Zig version
+        id: zig
+        shell: bash
+        run: echo "version=$(cat .zig-version)" >> "$GITHUB_OUTPUT"
+
       - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.zig.outputs.version }}
 
       - name: Print Zig version
         run: zig version
