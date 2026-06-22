@@ -43,11 +43,11 @@ pub fn build(b: *std.Build) void {
     const cc_base = if (is_windows)
         which(b, &.{ "clang-cl.exe", "clang-cl" }) orelse "clang-cl"
     else
-        which(b, &.{ "clang-21", "clang" }) orelse "clang";
+        which(b, &.{ "clang-22", "clang-21", "clang" }) orelse "clang";
     const cxx_base = if (is_windows)
         which(b, &.{ "clang-cl.exe", "clang-cl" }) orelse "clang-cl"
     else
-        which(b, &.{ "clang++-21", "clang++" }) orelse "clang++";
+        which(b, &.{ "clang++-22", "clang++-21", "clang++" }) orelse "clang++";
 
     const a = b.allocator;
     var flags: std.ArrayList([]const u8) = .empty;
