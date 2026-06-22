@@ -11,16 +11,23 @@ This is the Bun WebKit fork - a customized version of WebKit's JavaScriptCore en
 
 ## Build Commands
 
-### Quick Build (TypeScript)
+### Quick Build (Zig)
+The `build.zig` thin driver orchestrates the CMake/Ninja build (it does not
+replace CMake or code generation). Requires a `zig` toolchain plus `cmake` and
+`ninja`.
 ```bash
-# Debug build (recommended for development)
-bun build.ts debug
+# Debug build (recommended for development) — this is the default
+zig build -Dconfig=debug
 
 # Release build
-bun build.ts release
+zig build -Dconfig=release
 
 # Release with LTO (Link Time Optimization)
-bun build.ts lto
+zig build -Dconfig=lto
+
+# Configure only, or print the cmake commands without running them
+zig build configure -Dconfig=debug
+zig build -Dconfig=release -Dprint=true
 ```
 
 ### Platform-Specific Build Scripts
@@ -181,7 +188,7 @@ Custom event loop implementation for Bun's runtime requirements
 - **For platform code**: See `wtf/` and platform-specific subdirectories
 
 ### Debugging
-1. Use debug builds for development (`bun build.ts debug`)
+1. Use debug builds for development (`zig build -Dconfig=debug`)
 2. Enable sanitizers for memory debugging: `ENABLE_SANITIZERS=address`
 3. Use `dataLog()` for printf-style debugging in JSC code
 4. Set breakpoints in tier transitions: `DFG::Plan::compileInThread`, `FTL::compile`

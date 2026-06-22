@@ -1,0 +1,49 @@
+name: build-zig driver
+
+on:
+  pull_request:
+    paths:
+      - build.zig
+      - .zig-version
+      - .github/workflows/build-zig.yml
+  push:
+    branches:
+      - buz-build-zig
+  workflow_dispatch:
+
+jobs:
+  driver:
+    name: validate build.zig (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # setup-zig@v2 does not auto-read .zig-version, so pass it explicitly.
+      - name: Read pinned Zig version
+        id: zig
+        shell: bash
+        run: echo "version=$(cat .zig-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.zig.outputs.version }}
+
+      - name: Print Zig version
+        run: zig version
+
+      # Compiles build.zig and runs build() — catches API/logic errors.
+      - name: Validate build.zig compiles
+        run: zig build --help
+
+      # Dry-run: prints the exact cmake argv per config without invoking cmake.
+      # Exercises the per-OS branches (mac ICU env, Windows vcpkg ICU paths).
+      - name: Dry-run cmake argv (debug)
+        run: zig build -Dconfig=debug -Dprint=true
+      - name: Dry-run cmake argv (release)
+        run: zig build -Dconfig=release -Dprint=true
+      - name: Dry-run cmake argv (lto)
+        run: zig build -Dconfig=lto -Dprint=true
